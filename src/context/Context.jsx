@@ -3,6 +3,26 @@ import main from "../config/gemini";
 
 export const Context = createContext();
 
+// Helper function to convert basic Markdown to HTML
+const formatResponse = (response) => {
+    // 1. Replace **...** with <b>...</b>
+    let formattedText = response.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    
+    // 2. Replace ###... with <h3>...</h3> (Handle specific heading levels)
+    formattedText = formattedText.replace(/###\s*(.*)/g, '<h3>$1</h3>');
+    
+    // 3. Replace ##... with <h2>...</h2>
+    formattedText = formattedText.replace(/##\s*(.*)/g, '<h2>$1</h2>');
+
+    // 4. Replace *... with <li>...</li> (Basic bullet point handling)
+    formattedText = formattedText.replace(/^\*\s*(.*)/gm, '<li>$1</li>');
+    
+    // 5. Replace raw newlines (\n) with HTML line breaks (<br>)
+    formattedText = formattedText.replace(/\n/g, '<br>');
+
+    return formattedText;
+}
+
 const ContextProvider = (props) => {
 
     const [input,setInput] = useState("");
@@ -21,47 +41,33 @@ const ContextProvider = (props) => {
     const newChat = () => {
         setLoading(false)
         setShowResult(false)
+        setResultData("")
     }
     
     const onSent = async (prompt) => {
         setResultData("")
         setLoading(true)
         setShowResult(true)
-
-        let response;
-        if (prompt !== undefined){
-            response = await main(prompt);
-            setRecentPrompt(prompt)
-        }
-        else{
-            setPrevPrompts(prev =>[...prev,input])
-            setRecentPrompt(input)
-            response = await main(input)
-        }
-
+        
+        // Use either the passed prompt or the current input state
+        const sentPrompt = prompt || input;
+        
+        setRecentPrompt(sentPrompt)
+        setPrevPrompts(prev=>[...prev, sentPrompt])
         setInput("")
-        let responseArray = response.split("**");
-        let newResponse ="";
-        for(let i=0; i<responseArray.length; i++){
-            if (i === 0 || i%2 !==1) {
-                newResponse += responseArray[i];
-            }
-            else{
-                newResponse += "<b>"+responseArray[i]+"</b>"
-            }
-        }
-
-        let newResponse2 = newResponse.split("*").join("</br>")
-        let newResponseArray = newResponse2.split(" ");
+        
+        const rawResponse = await main(sentPrompt)
+        
+        // Process the raw Markdown response into HTML format
+        const formattedResponse = formatResponse(rawResponse);
+        
+        let newResponseArray = formattedResponse.split(" ");
         for(let i=0;i<newResponseArray.length;i++){
             const nextWord = newResponseArray[i];
             delayPara(i,nextWord+" ")
         }
         setLoading(false)
-        
-
     }
-
 
     const contextValue = {
         prevPrompts,
@@ -82,7 +88,6 @@ const ContextProvider = (props) => {
             {props.children}
         </Context.Provider>
     )
-
 }
 
 export default ContextProvider
